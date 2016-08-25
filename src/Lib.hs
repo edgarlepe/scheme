@@ -32,11 +32,13 @@ readExp input =
 parseExpr :: Parser LispVal
 parseExpr = parseAtom
         <|> parseString
-        <|> try parseComplex
-        <|> try parseReal
-        <|> try parseRational
-        <|> try parseInteger
+        <|> parseNumber
         <|> try parseChar
+        <|> parseQuoted
+        <|> do _ <- char '('
+               x <- try parseList <|> try parseDottedList
+               _ <- char ')'
+               return x
 
 parseAtom :: Parser LispVal
 parseAtom =
@@ -55,12 +57,18 @@ parseString =
      _ <- char '"'
      return $ String x
 
+parseNumber :: Parser LispVal
+parseNumber = try parseComplex
+          <|> try parseReal
+          <|> try parseRational
+          <|> try parseInteger
+
 parseInteger :: Parser LispVal
 parseInteger = parseDec
-          <|> parseDec2
-          <|> parseOct
-          <|> parseHex
-          <|> parseBin
+           <|> parseDec2
+           <|> parseOct
+           <|> parseHex
+           <|> parseBin
 
 parseOct :: Parser LispVal
 parseOct = try (string "#o") >> many1 octDigit >>= return . Integer . octToDig
@@ -127,6 +135,21 @@ parseComplex =
      return . Complex $ (toDouble r) C.:+ (toDouble i)
   where toDouble (Real f)    = realToFrac f
         toDouble (Integer f) = fromIntegral f
+
+parseList :: Parser LispVal
+parseList = List <$> sepBy parseExpr spaces
+
+parseDottedList :: Parser LispVal
+parseDottedList =
+  do h <- endBy parseExpr spaces
+     t <- char '.' >> spaces >> parseExpr
+     return $ DottedList h t
+
+parseQuoted :: Parser LispVal
+parseQuoted =
+  do _ <- char '\''
+     x <- parseExpr
+     return $ List [Atom "quote", x]
 
 symbol :: Parser Char
 symbol = oneOf "!#$%&|*+-/:<=>?@^_~"
