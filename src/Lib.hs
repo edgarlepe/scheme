@@ -1,3 +1,5 @@
+-- Lib.hs
+
 module Lib
     ( symbol
     , readExp
@@ -5,14 +7,18 @@ module Lib
     ) where
 
 import Text.ParserCombinators.Parsec hiding (spaces)
-import Numeric (readHex, readOct)
+import Numeric (readHex, readOct, readFloat)
 import Data.Char (digitToInt)
-import Control.Monad ((>=>))
+import qualified Data.Complex as C
+import Data.Ratio ((%))
 
 data LispVal = Atom String
              | List [LispVal]
              | DottedList [LispVal] LispVal
-             | Number Integer
+             | Complex (C.Complex Double)
+             | Integer Integer
+             | Real Double
+             | Rational Rational
              | String String
              | Char Char
              | Bool Bool
@@ -26,8 +32,11 @@ readExp input =
 parseExpr :: Parser LispVal
 parseExpr = parseAtom
         <|> parseString
-        <|> parseNumber
-        <|> parseChar
+        <|> try parseComplex
+        <|> try parseReal
+        <|> try parseRational
+        <|> try parseInteger
+        <|> try parseChar
 
 parseAtom :: Parser LispVal
 parseAtom =
@@ -46,32 +55,32 @@ parseString =
      _ <- char '"'
      return $ String x
 
-parseNumber :: Parser LispVal
-parseNumber = parseDec
+parseInteger :: Parser LispVal
+parseInteger = parseDec
           <|> parseDec2
           <|> parseOct
           <|> parseHex
           <|> parseBin
 
 parseOct :: Parser LispVal
-parseOct = try (string "#o") >> many1 octDigit >>= return . Number . octToDig
+parseOct = try (string "#o") >> many1 octDigit >>= return . Integer . octToDig
   where octToDig = fst . head . readOct
 
 parseDec :: Parser LispVal
-parseDec = Number . read <$> many1 digit
+parseDec = Integer . read <$> many1 digit
 
 parseDec2 :: Parser LispVal
-parseDec2 = try (string "#d") >> Number . read <$> many1 digit
+parseDec2 = try (string "#d") >> Integer . read <$> many1 digit
 
 parseHex :: Parser LispVal
-parseHex = try (string "#x") >> many1 hexDigit >>= return . Number . hexToDig
+parseHex = try (string "#x") >> many1 hexDigit >>= return . Integer . hexToDig
   where hexToDig = fst . head . readHex
 
 parseBin :: Parser LispVal
 parseBin =
   try (string "#b") >>
   many1 (oneOf "10") >>=
-  return . Number . binToDig
+  return . Integer . binToDig
 -- x0 + 2 * (x1 + 2 * (x2 + 2 * (x3 + 2 * x4)))
   where binToDig "" = 0
         binToDig s = foldr f 0 ds
@@ -79,7 +88,10 @@ parseBin =
                 f x acc = x + 2 * acc
 
 parseChar :: Parser LispVal
-parseChar =
+parseChar = parseChar1 <|> parseChar2
+
+parseChar1 :: Parser LispVal
+parseChar1 =
   do _ <- try (string "#\\")
      x <- anyChar >>= \c -> notFollowedBy alphaNum >> return c
      return . Char $ x
@@ -91,6 +103,30 @@ parseChar2 =
   return . Char $ case x of
                     "newline" -> '\n'
                     "space"   -> ' '
+
+parseReal :: Parser LispVal
+parseReal =
+  do x <- many1 digit
+     _ <- char '.'
+     y <- many1 digit
+     return . Real . fst . head . readFloat $ x ++ ['.'] ++ y
+
+parseRational :: Parser LispVal
+parseRational =
+  do n <- many1 digit
+     _ <- char '/'
+     d <- many1 digit
+     return . Rational $ read d % read n
+
+parseComplex :: Parser LispVal
+parseComplex =
+  do r <- try $ parseReal <|> parseDec
+     _ <- char '+'
+     i <- try $ parseReal <|> parseDec
+     _ <- char 'i'
+     return . Complex $ (toDouble r) C.:+ (toDouble i)
+  where toDouble (Real f)    = realToFrac f
+        toDouble (Integer f) = fromIntegral f
 
 symbol :: Parser Char
 symbol = oneOf "!#$%&|*+-/:<=>?@^_~"
@@ -106,4 +142,3 @@ escapedChars = char '\\' >>
                           '"'  -> x
                           'n'  -> '\n'
                           'r'  -> '\r'
-                          't'  -> '\t'
