@@ -7,5 +7,5 @@ main :: IO ()
 main =
   do args <- getArgs
      case args of
-       (x:_) -> putStrLn $ readExp x
+       (x:_) -> putStrLn $ readExpr x
        _     -> putStrLn "No argument"
