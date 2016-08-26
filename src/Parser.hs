@@ -1,41 +1,18 @@
 -- Parser.hs
 
-module Parser
-  ( readExpr
-  , parseExpr
-  , parseAtom
-  , parseString
-  , parseNumber
-  , parseInteger
-  , parseOct
-  , parseDec
-  , parseDec2
-  , parseHex
-  , parseBin
-  , parseChar
-  , parseChar1
-  , parseReal
-  , parseRational
-  , parseComplex
-  , parseList
-  , parseDottedList
-  , parseQuoted
-  , parseQuasiQuoted
-  , parseUnquote
-  , symbol
-  , spaces
-  , escapedChars
-  ) where
+module Parser where
 
 import Text.ParserCombinators.Parsec hiding (spaces)
 import Numeric (readHex, readOct, readFloat)
 import Data.Char (digitToInt)
 import qualified Data.Complex as C
-import Data.Ratio ((%))
+import Data.Ratio ((%), numerator, denominator)
+import Data.Vector (Vector, fromList, toList)
 
 data LispVal = Atom String
              | List [LispVal]
              | DottedList [LispVal] LispVal
+             | Vector (Vector LispVal)
              | Complex (C.Complex Double)
              | Integer Integer
              | Real Double
@@ -44,24 +21,42 @@ data LispVal = Atom String
              | Char Char
              | Bool Bool
 
+
+instance Show LispVal where
+  show (String s)       = "\"" ++ s ++ "\""
+  show (Atom x)         = x
+  show (Bool True)      = "#t"
+  show (Bool False)     = "#f"
+  show (List xs)        = "(" ++ unwordsList xs ++ ")"
+  show (DottedList h t) = "(" ++ unwordsList h ++ " . " ++ show t ++ ")"
+  show (Integer n)      = show n
+  show (Complex c)      = show (C.realPart c) ++ case C.imagPart c of
+                                               0 -> ""
+                                               i -> "+" ++ show i ++ "i"
+  show (Real r)           = show r
+  show (Rational r)       = show (numerator r) ++ "/" ++ show (denominator r)
+  show (Char c)           = "#\\" ++ show c
+  show (Vector v)         = "#(" ++ (unwordsList . toList) v ++ ")"
+
 readExpr :: String -> String
 readExpr input =
   case parse parseExpr "lisp" input of
-    Left err -> "No match: " ++ show err
-    Right _  -> "Found value"
+    Left err   -> "No match: " ++ show err
+    Right val  -> "Found " ++ show val
 
 parseExpr :: Parser LispVal
-parseExpr = parseAtom
-        <|> parseString
+parseExpr = parseUnquote
+        <|> try parseVector
+        <|> parseAtom
+        <|> try parseString
         <|> parseNumber
         <|> try parseChar
-        <|> parseQuoted
+        <|> try parseQuoted
         <|> do _ <- char '('
                x <- try parseList <|> try parseDottedList
                _ <- char ')'
                return x
         <|> parseQuasiQuoted
-        <|> parseUnquote
 
 parseAtom :: Parser LispVal
 parseAtom =
@@ -150,14 +145,27 @@ parseRational =
      return . Rational $ read d % read n
 
 parseComplex :: Parser LispVal
-parseComplex =
-  do r <- try $ parseReal <|> parseDec
+parseComplex = try parseComplex1 <|> try parseComplex2
+
+parseComplex1 :: Parser LispVal
+parseComplex1 =
+  do r <- parseDec
      _ <- char '+'
-     i <- try $ parseReal <|> parseDec
+     i <- parseDec
      _ <- char 'i'
      return . Complex $ (toDouble r) C.:+ (toDouble i)
-  where toDouble (Real f)    = realToFrac f
-        toDouble (Integer f) = fromIntegral f
+
+parseComplex2 :: Parser LispVal
+parseComplex2 =
+  do r <- parseReal
+     _ <- char '+'
+     i <- parseReal
+     _ <- char 'i'
+     return . Complex $ (toDouble r) C.:+ (toDouble i)
+
+toDouble :: Fractional a => LispVal -> a
+toDouble (Real f)    = realToFrac f
+toDouble (Integer f) = fromIntegral f
 
 parseList :: Parser LispVal
 parseList = List <$> sepBy parseExpr spaces
@@ -186,6 +194,13 @@ parseUnquote =
      e <- parseExpr
      return $ List [Atom "unquote", e]
 
+parseVector :: Parser LispVal
+parseVector =
+  do try $ string "#("
+     v <- sepBy parseExpr spaces
+     char ')'
+     (return . Vector . fromList) v
+
 symbol :: Parser Char
 symbol = oneOf "!#$%&|*+-/:<=>?@^_~"
 
@@ -200,3 +215,6 @@ escapedChars = char '\\' >>
                           '"'  -> x
                           'n'  -> '\n'
                           'r'  -> '\r'
+
+unwordsList :: [LispVal] -> String
+unwordsList = unwords . map show
