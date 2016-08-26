@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/edgarlepe/scheme.svg?branch=new_travis)](https://travis-ci.org/edgarlepe/scheme)
+
 # SCHEME R5RS INTERPRETER
 
 My Write Yourself a Scheme in 48 Hours Project
