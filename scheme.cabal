@@ -8,25 +8,26 @@ license-file:        LICENSE
 author:              Edgar Giovanni Lepe
 maintainer:          lepe.edgar10@gmail.com
 copyright:           2016 Edgar Giovanni Lepe
-category:            Web
+category:            Interpreter
 build-type:          Simple
 -- extra-source-files:
 cabal-version:       >=1.10
+tested-with:         GHC == 7.10.3, GHC == 8.0.1
 
 library
   hs-source-dirs:      src
   exposed-modules:     Lib
   build-depends:       base >= 4.7 && < 5
                      , parsec
+                     , vector
   default-language:    Haskell2010
 
 executable scheme-exe
   hs-source-dirs:      app
   main-is:             Main.hs
-  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  ghc-options:         -O -threaded -rtsopts -with-rtsopts=-N
   build-depends:       base
                      , scheme
-                     , parsec
   default-language:    Haskell2010
 
 test-suite scheme-test
@@ -35,6 +36,7 @@ test-suite scheme-test
   main-is:             Spec.hs
   build-depends:       base
                      , scheme
+                     , tasty
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   default-language:    Haskell2010
 
