@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/edgarlepe/scheme.svg?branch=new_travis)](https://travis-ci.org/edgarlepe/scheme)
+[![Build Status](https://travis-ci.org/edgarlepe/scheme.svg?branch=master)](https://travis-ci.org/edgarlepe/scheme)
 
 # SCHEME R5RS INTERPRETER
 
